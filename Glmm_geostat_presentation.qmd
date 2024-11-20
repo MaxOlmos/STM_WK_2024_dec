@@ -1,0 +1,472 @@
+---
+title: "Spatio-Temporal Modelling using Generalised Linear Mixed Effects Models"
+author: "Maxime Olmos, Baptiste Alglave & Etienne Rivot"
+format: thinkridentity-revealjs
+---
+
+## WHY
+
+::: incremental
+
+* Application in the field of ecology is species distribution models (SDMs)
+
+    + Predicts variation in density $\mu_{s,t}$ across multiple locations 𝑠 and time intervals 𝑡
+    
+* Applicable to other fields and any geostatistical data collected continuously in space and approximated in discrete time-intervals
+
+* ![](input_images/Table1_VAST.PNG)  *From Thorson 2019,* <https://doi.org/10.1016/j.fishres.2018.10.013>\
+
+::: 
+
+
+## WHAT (1/2) GLMMs with Spatial and Spatiotemporal Random Fields
+
+::: incremental
+
+* GLMM *Generalized Mixed effects Models*
+
+    + Hierarchical models
+
+    + Measured variables : predictors in a model (ex: measuring and modelling temperature effects on species abundance)
+
+    + Unmeasured (Latent) Variables: can cause residual spatial correlations
+
+* Geostatistical GLMM
+
+    + With spatially correlated random effects are good tools to account for residual spatial correlation
+
+* **But** computationally challenging
+
+    + Due to the need to invert large matrices to account for covariation when evaluating the multivariate normal density function
+
+* **Solution** Use the SPDE approach to approximate Gaussian random fields
+
+    + where the random effects describing the spatial patterning are assumed to be drawn from a multivariate normal distribution,
+    + constrained by covariance functions such as the exponential or Matérn
+:::
+
+
+## WHAT (2/2) Model description
+
+1.  Latent process 
+
+2.  Parameters
+
+3.  Link function and observation error distributions
+
+
+## WHAT (2/2) Model description
+
+1.  Latent process : linear predictors
+
+
+
+$$
+\begin{split}
+p_{s,t} =&\underbrace{\ β_t}_{\text{Temporal variation = average temporal effect}} 
++ \underbrace{ ω_s}_{\text{Spatial variation = niche effect}} 
++ \underbrace{ε_{s,t}}_{\text{Spatio-temporal variation = non obs. environmental effects}} 
++ \underbrace{X_{s,t} \ β}_{\text{covariates effects}}\\
+\end{split}
+$$
+
+
+## WHAT (2/2) Model description
+
+1.  Latent process : linear predictors
+
+2.  Parameters
+
+::: panel-tabset
+
+### Latent Spatial components 
+
+
+$$ 
+  \begin{split}
+ \underbrace{ ω_s}_{\text{Spatial variation}}  \sim MVN(0,Σ_{ω})\\
+\end{split} 
+$$
+
+### Latent Spatio temp components
+
+$$ 
+  \begin{split}
+ \underbrace{ ε_{s,t} }_{\text{Spatiotemporal variation}}  \sim MVN(0,Σ_{ε})
+\end{split} 
+$$
+
+### Spatial Covariance
+
+* [**random effects**]{.underline} describing the spatial patterning are assumed to be drawn from a [**multivariate normal distribution**]{.underline} constrained by [**covariance functions**]{.underline}
+
+![](input_images/matern.png){fig-align="center" width="500"}
+
+### Latent Temp components
+
+$$ 
+ \begin{split}
+ \underbrace{\ β (t)}_{\text{Average temporal variation : fixed effect, IID, RW, AR }} \\  
+\end{split} 
+$$
+   
+
+
+:::
+
+## WHAT (2/2) Model description
+
+1.  Latent process : linear predictors
+
+2.  Parameters
+
+3.  Link function and observation error distributions
+
+
+    + Link function $g$
+$$\mu_{s,t}=g^{-1}(p_{s,t}) $$
+    + Likelihodd functions
+    
+        - The expected value $\mathbb{E[.]}$ of an observation $y$ at coordinates in space $s$ and time $t$ is defined as the mean $\mu_{s,t}$
+
+$$
+\mathbb{E}[y_{s,t}]= \mu_{s,t} 
+$$
+
+$$
+y_{s,t} \sim  L(mu_{s,t}, \theta) 
+$$
+with $L$ any probability distribution and $\theta$ the parameters associated to this distribution
+
+## HOW - Geostatistical GLMM packages
+::: incremental
+
+* lme4, glmmTMB commonly used (user friendly) but not SPDE approach
+
+* [VAST](https://github.com/James-Thorson-NOAA/VAST/wiki), [tinyVAST](https://vast-lib.github.io/tinyVAST/index.html), inlabru : powerful, uses SPDE, but not user friendly
+
+    + for multiple categories 𝑐, $\mu_{s,t,c}$
+
+        - multiple species
+
+        - multiple size/age/sex classes for each individual species
+
+        - a mix of biological, physical, and fishery variables describing an ecosystem
+
+* [sdmTMB](https://pbs-assess.github.io/sdmTMB/) good candidate to fit spatiotemporal models
+::: 
+
+
+
+## HOW - CookBook - A friendly advice
+
+::: incremental
+* VAST, sdmTMB and tinyVAST has a LOT of options and can do a lot of things
+
+* Spatiotemporal models are complex because they combine spatial, temporal and spatiotemporal processes
+
+* Consequence : We will not present all the case studies and packages configurations
+
+* Our workshop strategy : 1 question = 1 model = 1 configuration
+:::
+
+## HOW - CookBook - The different steps
+
+
+![](input_images/steps_sdmtmb.PNG){fig-align="center" width="500"}
+
+\~*From Anderson et al.2023,* <https://doi.org/10.1101/2022.03.24.485545>\~\
+
+
+## HOW - CookBook - The Spatial resolution : data, mesh, grid
+
+::: panel-tabset
+### Year Resolution
+
+```{r}
+#| echo: true
+#| fig-width: 10
+#| fig-height: 4.5
+# Load packages
+
+library(VAST);
+library(ggplot2);
+library(dplyr);
+library(viridis);
+library("rnaturalearth");
+library("rnaturalearthdata")
+library(sf);
+library(here)
+theme_set(theme_bw())
+
+# load data
+example = load_example( data_set="EBS_pollock" )
+data_ex1 <- example$sampling_data
+
+# Some spatial stuff
+world <- ne_countries(scale = "medium", returnclass = "sf")
+xlims <-range(pretty(data_ex1$Lon))#range(pretty(Data_Geostat$Lon))
+ylims <-range(pretty(data_ex1$Lat))#range(pretty(Data_Geostat$Lat))
+
+# create dir
+dir <- here()
+dir_ex1 <-  paste0(dir,"/ex1/")
+
+```
+
+
+```{r}
+#| echo: true
+#| fig-width: 10
+#| fig-height: 4.5
+Nber_year <- length(unique(data_ex1$Year))
+min_year <- min(data_ex1$Year)
+max_year <- max(data_ex1$Year)
+
+```
+
+| Number year | starting year | end year |
+|-------------|---------------|----------|
+| 33          | 1982          | 2014     |
+
+### Spatial resolution
+
+```{r}
+#| echo: true
+#| fig-width: 5
+#| fig-height: 5
+p <- ggplot(data_ex1 ) +
+geom_point(aes(Lon, Lat), col="red")+
+geom_sf(data=world, col=NA, fill="black")+
+coord_sf(xlim = xlims, ylim = ylims)
+p
+```
+
+
+### Data config
+
+REMINDER - Objective : Generating an abundance index using spatiotemporal survey data Region
+
+* Provide footprint of your region of interest to run SPDE and generate knots
+
+* 3 spatial resolutions :
+
+    + Data
+
+    + Inference : knots
+
+    + Extrapolation
+
+        - interpolate the predictionss from knotsto extrapolation grid cells, using the triangulated mesh constructed from knots (using INLA)
+
+### Rcode : the grids (1/2)
+
+```{r}
+# ??make_settings()
+settings = make_settings( n_x = 75, #number of knots
+                          Region = example$Region,# the extrapolation grid
+                          purpose = "index2") # index of abundance
+
+```
+
+![](input_images/grids.png){fig-align="center" width="700"}
+
+### Rcode : the grids (2/2)
+
+![](input_images/knot.png){fig-align="center" width="800"}
+
+:::
+
+## HOW - CookBook - GLMM with zero in the data , how we think
+
+::: panel-tabset
+
+###  Model : Latent process
+
+* How many predictors
+    + 2 predictors : Hurdle/delta (poisson linked)
+
+        - encounter probability
+
+        - positive catch rate
+        
+    + 1 predictor  
+    
+###  Parameters
+
+* Spatial terms ?
+* Spatiotemporal terms ?
+* Covariates ? boat effect for Abundance index
+* Fixed effects for intercept ? Abundance index
+
+![](input_images/sdmtmbcomponent.PNG){fig-align="center" width="800"}
+\~*From Anderson et al.2023,* <https://doi.org/10.1101/2022.03.24.485545>\~\
+
+###  Link functions and observation error distributions
+
+* Link functions
+
+    + Poisson link delta model
+
+        - encounter probability : logit
+
+        - positive catch rate : log
+        
+    + 1 predictor  : log     
+
+* Observation distribution
+
+    + Poisson link delta model
+
+        - encounter probability : binomial
+
+        - positive catch rate : lognormal (gamma)
+        
+    + Tweedie    
+    
+### Diagnostics Model evaluation
+
+* Diagnostics
+
+    + Maximum Final Grandient for all parameters is less then 10^-5
+    + Convergence check
+    + Hessian matrix positive
+    + Check the sd of all parameters
+
+
+* Residual checking
+
+    + Dharma : Simulation-based randomized-quantile residuals : QQ residual, residual vs model predictions
+
+* AIC and/or Cross validation
+
+:::    
+
+## CASE STUDIES
+::: panel-tabset
+
+### Atelier 1 
+
+**Question** : Comprendre et représenter la variabilité spatio-temporelle des œufs des petits
+pélagiques (Martin Huret)
+
+**Données de base** : Séries temporelles de données brutes sur la concentration en oeufs
+d'anchois/sardine sur l’ensemble du golfe de Gascogne le long des radiales de la campagnes
+PELGAS (2000-2024), ou données interpolées selon méthode du blocking (gridmap). Les
+données sont également disponibles par stade de développement des oeufs (3 à 5 stades
+selon les années).
+
+**Objectif** : Proposer une représentation en faible dimension du jeu de données et analyser les
+patrons de variation principaux. La prise en compte de la mortalité des oeufs doit pouvoir
+être prise en compte pour une meilleure estimation de la ponte journalière.
+Méthode(s) proposée(s) : Méthode des EOFs déjà testée, donne des premiers résultats
+intéressants sur la caractérisation de changement dans les patrons de ponte. Que peuvent
+nous apporter d'autres types de modèles spatio-temporels 
+
+### Atelier 2 
+
+**Question** : Modéliser la variation spatiotemporelle de la condition corporelle chez les
+sardines et anchois (Aurélien Favreau)
+
+**Données de base** : Les données incluent des mesures de longueur et de poids de sardines
+dans le golfe de Gascogne sur la période 2000-2023. Ces données permettent de déterminer
+la condition corporelle des individus, basée sur les résidus d'une relation allométrique
+longueur-poids (facteur de condition de Le Cren).
+Objectif : Modéliser la distribution spatio-temporelle de la condition des sardines et explorer
+l'effet de la densité-dépendance et l'impact des changements environnementaux
+(température et qualité de la nourriture) sur la condition et la densité.
+
+**Méthode(s) proposée(s)** : GLMM spatio-temporel (VAST, tinyVAST)
+
+### Atelier 3
+
+**Question** : Classifier des données spatio-temporelles multivariées d’espèces marines pour
+identifier des zones fonctionnelles multispécifiques (Baptiste Alglave)
+
+**Données de base** : Séries temporelles de cartes sur l’ensemble du golfe de Gascogne pour un
+ensemble d’espèce (e.g. sole, merlan, encornet). Les séries temporelles sont constituées de
+200 pas de temps (i.e. 200 cartes).
+
+**Objectif** : Proposer une représentation en faible dimension du jeu de données et réaliser un
+classification dans cet espace. Interpréter les différents clusters en terme d’écologie des
+espèces (habitats essentiels / saisons écologiques).
+
+**Méthode(s) proposée(s)** : Etant donnée le caractére complexe et non-linéaire des processus
+écologiques, les méthodes tel que l’ACP sont limités dans ce cas là.
+Nous proposons de réduire la dimension de ses données et de réaliser la classification en se
+basant sur des méthodes de deep-learning type auto-encodeur variationnel (VAE). Tout
+autre méthode de deep learning (ou simplement d’apprentissage statistique) pourra être
+proposée pourvu qu’elle réponde à la question posée
+
+### Atelier 4 
+
+**Question** : Construire des indices d'abondance à partir de données de campagnes
+scientifiques (espèce : Merlan – Paul Gatti, Youen Vermard)
+
+**Objectif** : Le principal objectif est de mettre à profit la série EVHOE (1997-2023) afin
+d’élaborer un indice d’abondance pour le merlan (Merlangius merlangus) dans le golfe de
+Gascogne via l’outil VAST.
+Les questions suivantes pourront être explorées :
+1. Quelle(s) est (sont) les options de paramétrisation de VAST la (les) plus
+appropriée(s) ?
+2. Quel est l’impact des années manquantes (e.g. avarie Thalassa en 2017) ? Peut-on
+s’en affranchir ?
+3. Observe-t-on une tendance commune entre le Golfe de Gascogne et la mer
+Celtique ?
+4. Un indice structuré en taille ou en âge ?
+5. Comment prendre en compte des co-variables environnementales (profondeur et
+température de fond) ?
+
+**Méthode(s)** proposée(s) : GLMM spatio-temporel (sdmTMB , VAST)
+
+
+### Atelier 5 
+
+**Question** : Analyser et modéliser des données spatio-temporelles de pêcheries à
+Madagascar (Sandra Ranaivomanana, Marc Leopold)
+
+**Données de base** : Les données proviennent du suivi permanent d’un échantillon d’une
+centaine de petits pêcheurs en pirogues à voile dans les récifs coralliens au sud-ouest de
+Madagascar (baie de Ranobe ~200 km²) entre octobre 2021 et janvier 2023 (16 mois
+consécutifs). Les informations ont été collectées i) tous les jours (poids total des captures et
+type d’engin de pêche) pour environ 20000 sorties de pêche et ii) au débarquement sur un
+sous-échantillon de 1000 sorties de pêche (diversité et taille des poissons récifaux). On
+recense plus de 245 espèces de poissons récifaux et répartis dans 75 familles.
+En parallèle, pour spatialiser les captures ci-dessus, les pirogues ont été équipées d’un
+traceur GPS enregistrant les positions chaque minute, permettant de distinguer précisément
+les sites de pêche par sortie. Chaque donnée de capture est ainsi associée à un ensemble de points
+latitude/longitude et heure/jour (environ 100-200 points par sortie) qui définit un effort de
+pêche effectif par engin.
+Enfin une cartographie des différents habitat marins associés aux récifs coralliens (polygones)
+est disponible.
+Toutes ces données sont disponibles dans une base PostGrSQL sur un serveur en ligne.
+
+**Objectif** : L’objectif est d’analyser la variation temporelle (mensuelle) de la distribution
+spatiale des captures par unité d’effort (CPUE en kg par minute de pêche), utilisées comme
+indice d’abondance.
+Afin d’alléger les analyses, les espèces pourront être agrégées i) dans leur globalité et/ou ii)
+dans des groupes fonctionnels définis selon leurs caractéristiques en rapport avec la taille :
+taille maximale (poisson de petite taille – poisson de grande taille) et/ou leur maturité
+sexuelle (poisson adulte et juvénile). Le type d’habitat (mangrove, lagon, herbier, récif) et la
+pression de pêche pourront être utilisés comme des facteurs explicatifs.
+
+**Méthode(s) proposée(s)** : sdmTMB
+
+:::  
+
+## Ethics
+
+* Participants
+
+    + Workshop are not yet pubished
+    
+    + Workshop Leaders are responsible for data. **Please do not share or use those data outside of the workshop**
+    
+    + If you re-use the script for a futur project, please contact the workshop leader at the very least.
+
+* Leaders
+
+    + If you publish your work, don't forget the participants who have contributed a certain amount of work.
+
+* Finally : HAVE FUN
+
