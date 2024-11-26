@@ -454,7 +454,7 @@ pression de pêche pourront être utilisés comme des facteurs explicatifs.
 
 :::  
 
-## Ethics
+## Ethics and mindset
 
 * Participants
 
@@ -468,5 +468,10 @@ pression de pêche pourront être utilisés comme des facteurs explicatifs.
 
     + If you publish your work, don't forget the participants who have contributed a certain amount of work.
 
-* Finally : HAVE FUN
+* These sessions are based on self-learning. It is normal if you have bugs. It is part of the learning.
 
+* We propose a working framework for
+  + learning (together) about spatio-temporal models 
+  + building a community related to spatio-temporal methods for ecology.
+
+* Finally : HAVE FUN
